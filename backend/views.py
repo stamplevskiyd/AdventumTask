@@ -1,4 +1,6 @@
-from flask import render_template, redirect, url_for, request
+import io
+
+from flask import render_template, redirect, url_for, request, send_file
 import names
 
 from backend.models import User, Event, Metric
@@ -8,11 +10,10 @@ from backend.utils import *
 
 
 @app.route("/")
-def index():
-    """Main page view"""
-
-    print("Main page!")
-    return render_template('index.html')
+@app.route("/events")
+def events():
+    """Events list page"""
+    return render_template('events.html', events=Event.query.all(), metric_types=Metric.get_metric_types())
 
 
 @app.route("/users")
@@ -24,22 +25,13 @@ def users():
 @app.route("/create_user")
 def create_user():
     """Create new user with random name"""
-    name = names.get_full_name()
-    try:
-        user = User(name=name)
-        db.session.add(user)
-        db.session.commit()
-    except:
-        db.session.rollback()
-        print("User creating error! Check DB")
-    finally:
-        return redirect(url_for('users'))
+    generate_user()
+    return redirect(url_for('users'))
 
 
 @app.route("/clear_users")
 def clear_users():
     """Remove all users from db"""
-
     User.drop()
     return redirect(url_for('users'))
 
@@ -47,22 +39,51 @@ def clear_users():
 @app.route("/create_event")
 def create_event():
     """Create random event"""
-
     generate_event()
     return redirect(url_for('events'))
-
-
-@app.route("/events")
-def events():
-    """Events list page"""
-
-    events = Event.query.all()
-    return render_template('events.html', events=events, metric_types=Metric.get_metric_types())
 
 
 @app.route("/clear_events")
 def clear_events():
     """Remove all events from db"""
-
     Event.drop()
     return redirect(url_for('events'))
+
+
+@app.route("/start_modeling")
+def start_modeling():
+    """Erases all old data and starts new modeling"""
+    init_modeling()
+    return redirect(url_for('events'))
+
+
+@app.route("/save_to_csv")
+def save_to_csv():
+    """Saves current events to csv file"""
+    proxy = io.StringIO()
+    writer = csv.writer(proxy)
+
+    metric_types = Metric.get_metric_types()
+    header = ['event_id', 'user_id', 'datetime', 'type', 'source', 'browser_type', *metric_types]
+
+    writer.writerow(header)
+    for event in Event.query.order_by(Event.event_datetime):
+        event_metrics = event.get_typed_metrics()
+        row = [
+            event.id, event.user.id,
+            event.event_datetime.strftime("%d-%m-%Y %H:%M:%S"),
+            event.get_pretty_type, event.source, event.browser_type,  # Может, стоит вернуть тип в виде числа
+            *[event_metrics[metric_type] for metric_type in metric_types]
+        ]
+        writer.writerow(row)
+
+    mem = io.BytesIO()
+    mem.write(proxy.getvalue().encode())
+    mem.seek(0)
+    proxy.close()
+    return send_file(
+        mem,
+        as_attachment=True,
+        download_name='events.csv',
+        mimetype='text/csv'
+    )

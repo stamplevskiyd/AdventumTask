@@ -90,9 +90,8 @@ class Event(db.Model):
         for metric_type in Metric.get_metric_types():
             m_list = [m for m in self.metrics if m.type == metric_type]
             data[metric_type] = m_list[0].value if m_list else None
-        print(data)
+        # print(data)
         return data
-
 
     @classmethod
     def drop(cls):
@@ -129,3 +128,12 @@ class Metric(db.Model):
     def get_metric_types(cls):
         """Returns all metrics types"""
         return cls.TYPES
+
+    @classmethod
+    def drop(cls):
+        """Remove all event objects"""
+        try:
+            db.session.query(cls).delete()
+            db.session.commit()
+        except:
+            db.session.rollback()
