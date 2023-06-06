@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Аналитика рекламы</title>
+    <!-- Bootstrap core CSS -->
+    <link href="https://getbootstrap.com/docs/4.3/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-ggOyR0iXCbMQv3Xipma34MD+dH/1fQ784/j6cY/iJTQUOhcWr7x9JvoRxT2MZw1T"
+          crossorigin="anonymous">
+</head>
+<body>
+<!-- Навбар -->
+{% include "navbar.html" %}
+{% block nav %}
+{% endblock %}
+
+<!-- Кнопки управления событиями -->
+<div class="btn-group" role="group" aria-label="Top Buttons" style="margin-left: 10px; margin-bottom: 10px">
+    <a href="{{ url_for('create_event') }}" class="btn btn-primary" role="button">Сгенерировать событие</a>
+    <a href="{{ url_for('clear_events') }}" class="btn btn-primary" role="button">Удалить все события</a>
+</div>
+
+<!-- Таблица событий -->
+<table class="table table-striped">
+    <thead>
+    <tr>
+        <th scope="col">ID события</th>
+        <th scope="col">ID пользователя</th>
+        <th scope="col">Время события</th>
+        <th scope="col">Тип события</th>
+        <th scope="col">Источник</th>
+        <th scope="col">Тип браузера</th>
+        {% for metric_type in metric_types %}
+        <th scope="col">Метрика {{metric_type}}</th>
+        {% endfor %}
+    </tr>
+    </thead>
+    <tbody>
+    {% for event in events %}
+    <tr>
+        <th scope="row">{{event.id}}</th>
+        <td>{{event.user.id}}</td>
+        <td>{{event.event_datetime}}</td>
+        <td>{{event.get_pretty_type}}</td>
+        <td>{{event.source}}</td>
+        <td>{{event.browser_type}}</td>
+        <!-- Список метрик  -->
+        {% for metric_type in metric_types %}
+            {% for key, value in event.get_typed_metrics().items() %}
+                {% if metric_type == key %}
+                    <td>{{value}}</td>
+                {% endif %}
+            {% endfor %}
+        {% endfor %}
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</body>
+</html>

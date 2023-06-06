@@ -1,23 +1,24 @@
+from flask import render_template, redirect, url_for, request
+import names
+
 from backend.models import User, Event, Metric
 from backend import *
+
+from backend.utils import *
 
 
 @app.route("/")
 def index():
     """Main page view"""
-    print(1)
+
+    print("Main page!")
     return render_template('index.html')
 
 
 @app.route("/users")
 def users():
     """User control page"""
-    return render_template('users.html', users=get_users())
-
-
-def get_users():
-    """Returns users saved in db"""
-    return User.query.all()
+    return render_template('users.html', users=User.query.all())
 
 
 @app.route("/create_user")
@@ -32,45 +33,36 @@ def create_user():
         db.session.rollback()
         print("User creating error! Check DB")
     finally:
-        return redirect(url_for('index'))
+        return redirect(url_for('users'))
 
 
 @app.route("/clear_users")
 def clear_users():
     """Remove all users from db"""
-    try:
-        db.session.query(User).delete()
-        db.session.commit()
-    except:
-        db.session.rollback()
-    finally:
-        return redirect(url_for('index'))
+
+    User.drop()
+    return redirect(url_for('users'))
 
 
 @app.route("/create_event")
 def create_event():
     """Create random event"""
 
-    # TODO: много чего недоделано
+    generate_event()
+    return redirect(url_for('events'))
 
-    event_types = Event.get_event_types()
 
-    event = Event(
-        type=random.choice(event_types),
-        user=random.choice(get_users())
-    )
+@app.route("/events")
+def events():
+    """Events list page"""
 
-    match event.type:
-        case Event.SITE_VISIT:
-            pass
-        case Event.PHONE_CALL:
-            pass
-        case Event.PURCHASE:
-            pass
-        case Event.PURCHASE_CANCELLING:
-            pass
+    events = Event.query.all()
+    return render_template('events.html', events=events, metric_types=Metric.get_metric_types())
 
-    db.session.add(event)
-    db.session.commit()
 
-    return redirect(url_for('index'))
+@app.route("/clear_events")
+def clear_events():
+    """Remove all events from db"""
+
+    Event.drop()
+    return redirect(url_for('events'))
