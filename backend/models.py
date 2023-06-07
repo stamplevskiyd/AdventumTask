@@ -12,18 +12,16 @@ class User(db.Model):
     name = db.Column(db.String(100), nullable=False)
     events = db.relationship("Event", passive_deletes=True)
 
-    @classmethod
-    def drop(cls):
-        """Remove all user objects"""
-        try:
-            db.session.query(cls).delete()
-            db.session.commit()
-        except:
-            db.session.rollback()
+    def get_last_event(self):
+        """Get last user event"""
+        return max(self.events, key=lambda x: x.type)
 
 
 class Event(db.Model):
     """Event model"""
+
+    __tablename__ = 'events'
+    id = db.Column(db.Integer(), primary_key=True)
 
     SITE_VISIT = 1
     PHONE_CALL = 2
@@ -33,11 +31,8 @@ class Event(db.Model):
     TYPES = [
         SITE_VISIT, PHONE_CALL, PURCHASE, PURCHASE_CANCELLING
     ]
-
-    __tablename__ = 'events'
-
-    id = db.Column(db.Integer(), primary_key=True)
     type = db.Column(db.Integer(), nullable=False)
+
     user_id = db.Column(db.Integer(), db.ForeignKey('users.id', ondelete='CASCADE'))
     user = db.relationship("User", back_populates="events")
     event_datetime = db.Column(db.DateTime(), default=datetime.utcnow)
@@ -51,27 +46,18 @@ class Event(db.Model):
     SOURCE_TYPES = [
         SOURCE_YANDEX, SOURCE_VK, SOURCE_FACEBOOK, SOURCE_GOOGLE
     ]
-
     source = db.Column(db.String(100))
 
     BROWSER_DESKTOP = 'desktop'
     BROWSER_MOBILE = 'mobile'
     BROWSER_TABLET = 'tablet'
-    BROWSER_TV = 'tv'
 
     BROWSER_TYPES = [
-        BROWSER_DESKTOP, BROWSER_MOBILE, BROWSER_TABLET, BROWSER_TV
+        BROWSER_DESKTOP, BROWSER_MOBILE, BROWSER_TABLET
     ]
-
     browser_type = db.Column(db.String(100))
 
-    @classmethod
-    def get_event_types(cls):
-        """Get all available event types"""
-        return cls.TYPES
-
-    @property
-    def get_pretty_type(self) -> str:
+    def get_pretty_type(self):
         """Returns event type in human-readable way"""
 
         match self.type:
@@ -84,23 +70,13 @@ class Event(db.Model):
             case Event.PURCHASE_CANCELLING:
                 return 'purchase_cancelling'
 
-    def get_typed_metrics(self) -> dict:
+    def get_typed_metrics(self):
         """Values of all available metrics"""
         data = {}
-        for metric_type in Metric.get_metric_types():
+        for metric_type in Metric.TYPES:
             m_list = [m for m in self.metrics if m.type == metric_type]
             data[metric_type] = m_list[0].value if m_list else None
-        # print(data)
         return data
-
-    @classmethod
-    def drop(cls):
-        """Remove all event objects"""
-        try:
-            db.session.query(cls).delete()
-            db.session.commit()
-        except:
-            db.session.rollback()
 
 
 class Metric(db.Model):
@@ -123,17 +99,3 @@ class Metric(db.Model):
     event = db.relationship("Event", back_populates="metrics")
 
     value = db.Column(db.Integer(), nullable=False)
-
-    @classmethod
-    def get_metric_types(cls):
-        """Returns all metrics types"""
-        return cls.TYPES
-
-    @classmethod
-    def drop(cls):
-        """Remove all event objects"""
-        try:
-            db.session.query(cls).delete()
-            db.session.commit()
-        except:
-            db.session.rollback()

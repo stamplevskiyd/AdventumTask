@@ -1,11 +1,8 @@
 import io
+import csv
+from flask import render_template, redirect, url_for,  send_file
 
-from flask import render_template, redirect, url_for, request, send_file
-import names
-
-from backend.models import User, Event, Metric
 from backend import *
-
 from backend.utils import *
 
 
@@ -13,27 +10,35 @@ from backend.utils import *
 @app.route("/events")
 def events():
     """Events list page"""
-    return render_template('events.html', events=Event.query.all(), metric_types=Metric.get_metric_types())
+    return render_template(
+        'events.html',
+        events=models.Event.query.all(),
+        metric_types=models.Metric.TYPES
+    )
 
 
 @app.route("/users")
-def users():
+def users_list():
     """User control page"""
-    return render_template('users.html', users=User.query.all())
+    return render_template(
+        'users.html',
+        users=models.User.query.all(),
+    )
 
 
 @app.route("/create_user")
 def create_user():
     """Create new user with random name"""
-    generate_user()
-    return redirect(url_for('users'))
+    user = models.User(name=names.get_full_name())
+    db_functions.save_object(user)
+    return redirect(url_for('users_list'))
 
 
 @app.route("/clear_users")
 def clear_users():
     """Remove all users from db"""
-    User.drop()
-    return redirect(url_for('users'))
+    db_functions.clear_table(models.User)
+    return redirect(url_for('users_list'))
 
 
 @app.route("/create_event")
@@ -46,7 +51,7 @@ def create_event():
 @app.route("/clear_events")
 def clear_events():
     """Remove all events from db"""
-    Event.drop()
+    db_functions.clear_table(models.Event)
     return redirect(url_for('events'))
 
 
@@ -63,11 +68,11 @@ def save_to_csv():
     proxy = io.StringIO()
     writer = csv.writer(proxy)
 
-    metric_types = Metric.get_metric_types()
+    metric_types = models.Metric.TYPES
     header = ['event_id', 'user_id', 'datetime', 'type', 'source', 'browser_type', *metric_types]
 
     writer.writerow(header)
-    for event in Event.query.order_by(Event.event_datetime):
+    for event in models.Event.query.order_by(models.Event.event_datetime):
         event_metrics = event.get_typed_metrics()
         row = [
             event.id, event.user.id,

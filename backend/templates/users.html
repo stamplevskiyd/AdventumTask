@@ -13,11 +13,6 @@
 {% include "navbar.html" %}
 {% block nav %}
 {% endblock %}
-<!-- Кнопки управления пользователями -->
-<div class="btn-group" role="group" aria-label="Top Buttons" style="margin-left: 10px; margin-bottom: 10px">
-    <a href="{{ url_for('create_user') }}" class="btn btn-primary" role="button">Создать нового пользователя</a>
-    <a href="{{ url_for('clear_users') }}" class="btn btn-primary" role="button">Удалить всех пользователей</a>
-</div>
 
 <!-- Таблица с пользователями -->
 <table class="table table-striped">
@@ -25,6 +20,7 @@
     <tr>
         <th scope="col">ID</th>
         <th scope="col">Имя</th>
+        <th scope="col">Последнее событие</th>
     </tr>
     </thead>
     <tbody>
@@ -32,6 +28,7 @@
     <tr>
         <th scope="row">{{user.id}}</th>
         <td>{{user.name}}</td>
+        <td>{{user.get_last_event().get_pretty_type()}}</td>
     </tr>
     {% endfor %}
     </tbody>

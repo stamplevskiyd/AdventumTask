@@ -41,14 +41,14 @@
         <th scope="row">{{event.id}}</th>
         <td>{{event.user.id}}</td>
         <td>{{event.event_datetime}}</td>
-        <td>{{event.get_pretty_type}}</td>
+        <td>{{event.get_pretty_type()}}</td>
         <td>{{event.source}}</td>
         <td>{{event.browser_type}}</td>
         <!-- Список метрик  -->
         {% for metric_type in metric_types %}
             {% for key, value in event.get_typed_metrics().items() %}
                 {% if metric_type == key %}
-                    <td>{{value}}</td>
+                    <td>{{value}}</td>  <!-- Можно бы убрать None -->
                 {% endif %}
             {% endfor %}
         {% endfor %}

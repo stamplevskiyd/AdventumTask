@@ -31,9 +31,6 @@ class Config:
         self.call_success_max = data["metrics"]["call_success"]["max"]
 
         """Modeling settings"""
-        self.user_count_min = data["modeling"]["user_count"]["min"]
-        self.user_count_max = data["modeling"]["user_count"]["max"]
-
         self.event_count_min = data["modeling"]["event_count"]["min"]
         self.event_count_max = data["modeling"]["event_count"]["max"]
 

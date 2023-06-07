@@ -1,138 +1,94 @@
-import csv
 import datetime
 import random
 import names
-from io import BytesIO
 
-from backend.models import Event, User, Metric
-from backend import db, config
+from backend import db_functions, config, models
 
 current_time = datetime.datetime.now()
 
 
-def generate_time():
+def get_time() -> datetime.datetime:
     """Generates sequential random time"""
     global current_time
     current_time += datetime.timedelta(seconds=random.randint(1, 1000))
     return current_time
 
 
-def generate_user():
-    """Creates random user and saves in db"""
-    name = names.get_full_name()
-    try:
-        user = User(name=name)
-        db.session.add(user)
-        db.session.commit()
-    except:
-        db.session.rollback()
-        print("User creating error! Check DB")
-
-
-def generate_metric(metric_type: str) -> Metric | None:
-    """Generates metric of given type"""
-    metric = Metric(type=metric_type)
-    match metric_type:
-        case Metric.PURCHASE_PRICE:
-            metric.value = random.randint(config.purchase_price_min, config.purchase_price_max)
-        case Metric.PAGES_SCROLLED:
-            metric.value = random.randint(config.pages_scrolled_min, config.pages_scrolled_max)
-        case Metric.CALL_SUCCESS:
-            metric.value = random.randint(config.call_success_min, config.call_success_max)
-        case default:
-            return
-
-    return metric
-
-
 def generate_event() -> None:
-    """Chose random user and generate event, available for him"""
-    user = random.choice(User.query.all())
-    user_events = Event.query.filter_by(user=user).order_by(Event.type.desc())
-    if user_events.count() == 0:
-        """First event, generate site visit"""
-        generate_typed_event(event_type=Event.SITE_VISIT, user=user)
+    """Generates event of random type.
+    Creates new user for site visit, chooses suitable user for other types
+    """
+    available_types = [
+        i for i in
+        set([1] + [db_functions.find_last_event_type(user) + 1 for user in models.User.query.all()])
+        if i <= models.Event.PURCHASE_CANCELLING
+    ]
+    event_type = random.choice(available_types)
+
+    if event_type == models.Event.SITE_VISIT:
+        user = models.User(name=names.get_full_name())
+        db_functions.save_object(user)
     else:
-        """Generating next event in a row"""
-        last_event = user_events.first()
-        if last_event.type < Event.PURCHASE_CANCELLING:
-            new_event = generate_typed_event(event_type=last_event.type + 1, user=user)
-            if new_event.type == Event.PURCHASE_CANCELLING:
-                """Purchase and its cancelling should have the same price"""
-                new_metric = Metric.query.filter_by(event=new_event).one()
-                old_metric = Metric.query.filter_by(event=last_event).one()
-                new_metric.value = old_metric.value
-                db.session.add(new_metric)
-                db.session.commit()
+        # Пользователи, для которых применимо событие данного типа
+        suitable_users = [
+            user for user in models.User.query.all()
+            if (event := db_functions.find_last_event(user)) is not None and event.type == event_type - 1
+        ]  # Их существование гарантирует логика выбора типа события в предыдущем коде
+        user = random.choice(suitable_users)
 
-
-def generate_typed_event(event_type: str, user: User) -> Event:
-    """Generate one event of given type for given user"""
-    event = Event(
+    event = models.Event(
         type=event_type,
         user=user,
-        event_datetime=generate_time(),
+        event_datetime=get_time(),
     )
 
-    """Saving event to database"""
-    db.session.add(event)
-    db.session.commit()
+    if event_type == models.Event.SITE_VISIT:
+        event.source = random.choice(models.Event.SOURCE_TYPES)
+        event.browser_type = random.choice(models.Event.BROWSER_TYPES)
 
-    match event_type:
-        case Event.SITE_VISIT:
-            event.source = random.choice(Event.SOURCE_TYPES)
-            event.browser_type = random.choice(Event.BROWSER_TYPES)
+    db_functions.save_object(event)
+    generate_metrics(event=event)
 
+
+def generate_metrics(event: models.Event) -> None:
+    """Generate all needed metrics for given event"""
+    metrics = []
+    print("EVENT", event, event.id)
+    match event.type:
+        case models.Event.SITE_VISIT:
             # В общем случае может быть более 1 метрики, поэтому лучше выписать все здесь
-            metric = generate_metric(metric_type=Metric.PAGES_SCROLLED)
-            metric.event = event
-
-            db.session.add(metric)
-            db.session.commit()
-
-        case Event.PHONE_CALL:
+            metric = models.Metric(type=models.Metric.PAGES_SCROLLED)
+            metric.value = random.randint(config.pages_scrolled_min, config.pages_scrolled_max)
+            metrics.append(metric)
+        case models.Event.PHONE_CALL:
             # Браузер и источник не определимы для звонка
-            metric = generate_metric(metric_type=Metric.CALL_SUCCESS)
-            metric.event = event
+            metric = models.Metric(type=models.Metric.CALL_SUCCESS)
+            metric.value = random.randint(config.call_success_min, config.call_success_max)
+            metrics.append(metric)
+        case models.Event.PURCHASE:
+            metric = models.Metric(type=models.Metric.PURCHASE_PRICE)
+            metric.value = random.randint(config.purchase_price_min, config.purchase_price_max)
+            metrics.append(metric)
+        case models.Event.PURCHASE_CANCELLING:
+            metric = models.Metric(type=models.Metric.PURCHASE_PRICE)
+            prev_event = db_functions.find_event_by_type(user=event.user, event_type=models.Event.PURCHASE)
+            print("PREV_EVENT", prev_event)
+            print("PREV_METRIC", prev_event.metrics)
+            price = [m for m in prev_event.metrics if m.type == models.Metric.PURCHASE_PRICE][0].value
+            metric.value = price
+            metrics.append(metric)
 
-            db.session.add(metric)
-            db.session.commit()
-
-        case Event.PURCHASE:
-            # Источник уже не определить, прошло время (Скорее всего. Ну а если нет, добавить просто)
-            # event.browser_type = random.choice(Event.BROWSER_TYPES)
-
-            metric = generate_metric(metric_type=Metric.PURCHASE_PRICE)
-            metric.event = event
-
-            db.session.add(metric)
-            db.session.commit()
-
-        case Event.PURCHASE_CANCELLING:
-            # event.browser_type = random.choice(Event.BROWSER_TYPES)
-
-            metric = generate_metric(metric_type=Metric.PURCHASE_PRICE)
-            metric.event = event
-
-            db.session.add(metric)
-            db.session.commit()
-
-    return event
+    """Saving all generated metrics"""
+    for m in metrics:
+        m.event = event
+        db_functions.save_object(m)
 
 
-def init_modeling():
+def init_modeling() -> None:
     """Starts modeling and erases all created users and events"""
-    User.drop()
-    Metric.drop()
-    Event.drop()
 
-    user_count = random.randint(config.user_count_min, config.user_count_max)
-    print(user_count)
-    for i in range(user_count):
-        generate_user()
+    db_functions.clear_db()
 
     event_count = random.randint(config.event_count_min, config.event_count_max)
-    print(event_count)
     for i in range(event_count):
         generate_event()
-
